@@ -1,1 +1,9 @@
-# ladder-s-ascent-hard-challenge
+# Ladder's Ascent Hard Challenge
+
+## Compilation and Execution
+
+```sh
+javac FindMinMaxInFiles.java
+java FindMinMaxInFiles
+```
+
