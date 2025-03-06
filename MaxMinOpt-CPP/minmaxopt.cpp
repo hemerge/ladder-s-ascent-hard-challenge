@@ -49,8 +49,9 @@ void process_file(const std::string& filename) {
     const char* ptr = mappedData;
     const char* end = mappedData + fileSize;
 
-    __m512i minVec = _mm512_set1_epi64(LONG_MAX);
-    __m512i maxVec = _mm512_set1_epi64(LONG_MIN);
+    // Initialize AVX2 256-bit vectors
+    __m256i minVec = _mm256_set1_epi64x(LONG_MAX);
+    __m256i maxVec = _mm256_set1_epi64x(LONG_MIN);
 
     while (ptr < end) {
         long num = 0;
@@ -68,17 +69,19 @@ void process_file(const std::string& filename) {
 
         if (negative) num = -num;
 
-        minVec = _mm512_min_epi64(minVec, _mm512_set1_epi64(num));
-        maxVec = _mm512_max_epi64(maxVec, _mm512_set1_epi64(num));
+        __m256i numVec = _mm256_set1_epi64x(num);
+        minVec = _mm256_min_epi64(minVec, numVec);
+        maxVec = _mm256_max_epi64(maxVec, numVec);
 
         ++ptr; // Move past newline or space
     }
 
-    long tempMin[8], tempMax[8];
-    _mm512_storeu_si512((__m512i*)tempMin, minVec);
-    _mm512_storeu_si512((__m512i*)tempMax, maxVec);
+    // Extract results from AVX2 vectors
+    long tempMin[4], tempMax[4];
+    _mm256_storeu_si256((__m256i*)tempMin, minVec);
+    _mm256_storeu_si256((__m256i*)tempMax, maxVec);
 
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < 4; ++i) {
         localMin = std::min(localMin, tempMin[i]);
         localMax = std::max(localMax, tempMax[i]);
     }
