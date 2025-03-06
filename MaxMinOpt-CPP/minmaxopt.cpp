@@ -9,15 +9,17 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <immintrin.h>
 #include <climits>
 #include <chrono>
+#include <mutex>
 
 namespace fs = std::filesystem;
 
 size_t NUM_THREADS = std::thread::hardware_concurrency();
 std::atomic<long> globalMin(LONG_MAX);
 std::atomic<long> globalMax(LONG_MIN);
+std::atomic<size_t> processedFiles(0);
+std::mutex printMutex;
 
 void atomic_min(std::atomic<long>& target, long value) {
     long prev = target.load(std::memory_order_relaxed);
@@ -49,10 +51,6 @@ void process_file(const std::string& filename) {
     const char* ptr = mappedData;
     const char* end = mappedData + fileSize;
 
-    // Initialize AVX2 256-bit vectors
-    __m256i minVec = _mm256_set1_epi64x(LONG_MAX);
-    __m256i maxVec = _mm256_set1_epi64x(LONG_MIN);
-
     while (ptr < end) {
         long num = 0;
         bool negative = false;
@@ -69,21 +67,12 @@ void process_file(const std::string& filename) {
 
         if (negative) num = -num;
 
-        __m256i numVec = _mm256_set1_epi64x(num);
-        minVec = _mm256_min_epi64(minVec, numVec);
-        maxVec = _mm256_max_epi64(maxVec, numVec);
+        localMin = std::min(localMin, num);
+        localMax = std::max(localMax, num);
 
-        ++ptr; // Move past newline or space
-    }
-
-    // Extract results from AVX2 vectors
-    long tempMin[4], tempMax[4];
-    _mm256_storeu_si256((__m256i*)tempMin, minVec);
-    _mm256_storeu_si256((__m256i*)tempMax, maxVec);
-
-    for (int i = 0; i < 4; ++i) {
-        localMin = std::min(localMin, tempMin[i]);
-        localMax = std::max(localMax, tempMax[i]);
+        while (ptr < end && (*ptr < '0' || *ptr > '9') && *ptr != '-') {
+            ++ptr;
+        }
     }
 
     atomic_min(globalMin, localMin);
@@ -91,6 +80,28 @@ void process_file(const std::string& filename) {
 
     munmap(mappedData, fileSize);
     close(fd);
+
+    ++processedFiles;
+}
+
+void display_progress(size_t totalFiles) {
+
+    while (processedFiles < totalFiles) {
+        {
+            std::lock_guard<std::mutex> lock(printMutex);
+            std::cout << "\rProcessing: "
+                      << " " << processedFiles.load() << "/" << totalFiles << " files"
+                      << std::flush;
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    // Clear progress line after completion
+    {
+        std::lock_guard<std::mutex> lock(printMutex);
+        std::cout << "\rProcessing complete! (" << processedFiles.load() << "/" << totalFiles << ")           \n";
+    }
 }
 
 int main() {
@@ -105,9 +116,18 @@ int main() {
         }
     }
 
-    size_t numThreads = std::min(NUM_THREADS, files.size());
+    size_t totalFiles = files.size();
+    if (totalFiles == 0) {
+        std::cout << "No files to process.\n";
+        return 0;
+    }
+
+    size_t numThreads = std::min(NUM_THREADS, totalFiles);
     std::vector<std::thread> threads;
     std::atomic<size_t> fileIndex(0);
+
+    // Start progress animation in a separate thread
+    std::thread progressThread(display_progress, totalFiles);
 
     auto worker = [&]() {
         while (true) {
@@ -122,6 +142,9 @@ int main() {
 
     for (auto& t : threads)
         t.join();
+
+    // Wait for progress animation to finish
+    progressThread.join();
 
     auto end = std::chrono::high_resolution_clock::now();
     double elapsed = std::chrono::duration<double>(end - start).count();
