@@ -30,9 +30,6 @@ Time Taken: 1.10702 seconds
 - Uses **multi-threading** to process files in parallel
 - Employs **atomic min/max operations** to safely update global values across threads
 
-## Notes
-- **NOT REQUIRED ANYMORE** Ensure your **CPU supports AVX-512** (check with `cat /proc/cpuinfo | grep avx512` on Linux)
-
 ## License
 This project is released under the **MIT License**.
 
