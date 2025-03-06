@@ -8,7 +8,6 @@ Ensure you have the following dependencies installed:
 ## Build Instructions
 ### Using g++ (Recommended)
 ```sh
-# Compile with AVX-512 and optimization flags
 g++ -std=c++17 -O3 -march=native -pthread minmaxopt.cpp -o minmaxopt
 ```
 
@@ -18,21 +17,21 @@ Run the program by providing the directory containing the text files:
 ./minmaxopt
 ```
 
-### Expected Output
+### Sample Output
 ```sh
-Min: -999999
-Max: 999999
-Time Taken: 0.237589 seconds
+Processing complete! (15000/15000)           
+Min: -9223371980708175790, Max: 9223372023241467945
+Time Taken: 1.10702 seconds
 ```
 
 ## Performance Optimization
 - Uses **memory-mapped files (mmap)** instead of standard file I/O for faster access
-- Implements **AVX-512 SIMD instructions** to process multiple integers in parallel
+- Uses std::min / std::max on a per-thread basis instead of SIMD registers.
 - Uses **multi-threading** to process files in parallel
 - Employs **atomic min/max operations** to safely update global values across threads
 
 ## Notes
-- Ensure your **CPU supports AVX-512** (check with `cat /proc/cpuinfo | grep avx512` on Linux)
+- **NOT REQUIRED ANYMORE** Ensure your **CPU supports AVX-512** (check with `cat /proc/cpuinfo | grep avx512` on Linux)
 
 ## License
 This project is released under the **MIT License**.
